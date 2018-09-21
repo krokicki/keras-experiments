@@ -10,6 +10,7 @@
 import argparse
 import numpy as np
 import cv2
+import os
 from imutils import paths
 
 # constants
@@ -146,29 +147,41 @@ def classify(image_path, model_filepath):
     
     from keras.models import load_model
     model = load_model(model_filepath)
-    
-    # load the image, resize it to a fixed 32 x 32 pixels (ignoring
-    # aspect ratio), and then extract features from it
-    filename = image_path[image_path.rfind("/") + 1:]
-    image = cv2.imread(image_path)
-    image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
-    features = image_to_feature(image) / 255.0
-    features = features[np.newaxis, :, :, np.newaxis]
-    
-    probs = model.predict(features)[0]
-    prediction = probs.argmax(axis=0)
+
+    filepaths = [image_path,]
+    if (os.path.isdir(image_path)):
+        print("Scanning input directory for images")
+        from os import listdir
+        from os.path import isfile, join
+        filepaths = [join(image_path, f) for f in listdir(image_path) if isfile(join(image_path, f))]
 
     print("Input, Prediction, Confidence")
-    print("%s, %s, %2.4f" % (image_path, CLASSES[prediction], probs[prediction]))
+    for filepath in filepaths:
+        # load the image, resize it to a fixed 32 x 32 pixels (ignoring
+        # aspect ratio), and then extract features from it
+        filename = image_path[filepath.rfind("/") + 1:]
+        image = cv2.imread(filepath)
+        if image is None:
+            print("Cannot read image: "+filepath)
+            continue
 
-        
+        image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+        features = image_to_feature(image) / 255.0
+        features = features[np.newaxis, :, :, np.newaxis]
+
+        probs = model.predict(features)[0]
+        prediction = probs.argmax(axis=0)
+
+        print("%s, %s, %2.4f" % (filepath, CLASSES[prediction], probs[prediction]))
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Learn and use a CNN to classify image orientation')
     parser.add_argument('-M', '--model', type=str, required=True, help='Path to model file')
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument('-L', '--left', type=str, nargs='?', default=None, help='Path containing left-oriented images')
     group.add_argument('-R', '--right', type=str, nargs='?', default=None, help='Path containing right-oriented images')
-    group.add_argument('-I', '--input', type=str, nargs='?', default=None, help='Path for image to classify')
+    group.add_argument('-I', '--input', type=str, nargs='?', default=None, help='Path to image(s) to classify')
     args = parser.parse_args()
 
     if args.left or args.right:
